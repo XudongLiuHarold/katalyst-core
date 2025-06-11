@@ -179,6 +179,10 @@ const (
 	MetricTotalMemBandwidthNuma  = "mbm.total.numa"
 	MetricLocalMemBandwidthNuma  = "mbm.local.numa"
 	MetricVictimMemBandwidthNuma = "mbm.victim.numa"
+
+	MetricTotalPsMemBandwidthNuma  = "mbm.total.ps.numa"
+	MetricLocalPsMemBandwidthNuma  = "mbm.local.ps.numa"
+	MetricVictimPsMemBandwidthNuma = "mbm.victim.ps.numa"
 )
 
 // System info metrics
@@ -273,6 +277,10 @@ const (
 	MetricMbmTotalContainer  = "mbm.total.container"
 	MetricMbmlocalContainer  = "mbm.local.container"
 	MetricMbmVictimContainer = "mbm.victim.container"
+
+	MetricMbmTotalPsContainer  = "mbm.total.ps.container"
+	MetricMbmlocalPsContainer  = "mbm.local.ps.container"
+	MetricMbmVictimPsContainer = "mbm.victim.ps.container"
 )
 
 // container blkio metrics

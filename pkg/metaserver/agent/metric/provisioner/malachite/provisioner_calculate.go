@@ -303,16 +303,19 @@ func (m *MalachiteMetricsProvisioner) setContainerMbmTotalMetric(podUID, contain
 			}
 		}
 	}
+
 	prevMetric, err := m.metricStore.GetContainerMetric(podUID, containerName, consts.MetricMbmTotalContainer)
+	var mbmPerSec float64 = 0
 	if err == nil && prevMetric.Time != nil {
 		timeInterval := uint64(updateTime.Sub(*prevMetric.Time).Seconds())
-		if timeInterval <= 0 {
-			return
+		if timeInterval > 0 && totalMbm > uint64(prevMetric.Value) {
+			mbmPerSec = (float64(totalMbm) - prevMetric.Value) / float64(timeInterval)
 		}
-		totalMbm = (totalMbm - uint64(prevMetric.Value)) / timeInterval
 	}
 	m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMbmTotalContainer,
 		metric.MetricData{Value: float64(totalMbm), Time: updateTime})
+	m.metricStore.SetContainerMetric(podUID, containerName, consts.MetricMbmTotalPsContainer,
+		metric.MetricData{Value: mbmPerSec, Time: updateTime})
 }
 
 // uint64CounterDelta calculate the delta between two uint64 counters

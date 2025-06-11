@@ -58,7 +58,7 @@ var nodeRawMetricNameMapping = map[string]string{
 // nodeNUMARawMetricNameMapping maps the raw metricName (collected from agent.MetricsFetcher)
 // to the standard metricName (used by custom-metric-api-server)
 var nodeNUMARawMetricNameMapping = map[string]string{
-	consts.MetricTotalMemBandwidthNuma: apimetricnode.CustomMetricNUMAMemoryBandwidthTotal,
+	consts.MetricTotalPsMemBandwidthNuma: apimetricnode.CustomMetricNUMAMemoryBandwidthTotal,
 }
 
 // nodeCachedMetricNameMapping maps the cached metricName (processed by plugin.SysAdvisorPlugin)
@@ -128,7 +128,7 @@ func (n *MetricSyncerNode) Run(ctx context.Context) {
 	// there is no need to deRegister for numa-related metric
 	for rawNUMAMetricName := range n.numaMetricMapping {
 		for _, numaID := range n.metaServer.CPUDetails.NUMANodes().ToSliceNoSortInt() {
-			klog.Infof("register raw node numa metric: %v, numa: %d", rawNUMAMetricName, numaID)
+			klog.Infof("debug register raw node numa metric: %v, numa: %d", rawNUMAMetricName, numaID)
 			n.metaServer.MetricsFetcher.RegisterNotifier(metrictypes.MetricsScopeNuma, metrictypes.NotifiedRequest{
 				MetricName: rawNUMAMetricName,
 				NumaID:     numaID,
@@ -155,7 +155,7 @@ func (n *MetricSyncerNode) receiveRawNode(ctx context.Context, rChan chan metric
 			}
 
 			klog.V(4).Infof("get metric %v for node", response.Req.MetricName)
-			if tags := n.generateMetricTag(ctx); len(tags) > 0 {
+			if tags := n.generateMetricTagNode(ctx); len(tags) > 0 {
 				_ = n.dataEmitter.StoreFloat64(targetMetricName, response.Value, metrics.MetricTypeNameRaw, append(tags,
 					metrics.MetricTag{
 						Key: fmt.Sprintf("%s", data.CustomMetricLabelKeyTimestamp),
@@ -182,11 +182,12 @@ func (n *MetricSyncerNode) receiveRawNUMA(ctx context.Context, rChan chan metric
 
 			targetMetricName, ok := n.numaMetricMapping[response.Req.MetricName]
 			if !ok {
-				klog.Warningf("invalid npde numa raw metric name: %v", response.Req.MetricName)
+				klog.Warningf("invalid node numa raw metric name: %v", response.Req.MetricName)
 				continue
 			}
-			klog.V(4).Infof("get metric %v for node, numa %v", response.Req.MetricName, response.Req.NumaNode)
-			if tags := n.generateMetricTag(ctx); len(tags) > 0 {
+			klog.Infof("debug get metric %v for node %s, numa id %d, value %f", response.Req.MetricName, response.Req.NumaNode, response.Req.NumaID, response.Value)
+			if tags := n.generateMetricTagNuma(ctx, response.Req.NumaID); len(tags) > 0 {
+				klog.Infof("debug metric tags: %v", tags)
 				_ = n.dataEmitter.StoreFloat64(targetMetricName, response.Value, metrics.MetricTypeNameRaw, append(tags,
 					metrics.MetricTag{
 						Key: fmt.Sprintf("%s", data.CustomMetricLabelKeyTimestamp),
@@ -205,7 +206,7 @@ func (n *MetricSyncerNode) receiveRawNUMA(ctx context.Context, rChan chan metric
 	}
 }
 
-// generateMetricTag generates tags that are bounded to current Node object
+// generateMetricTag generates common tags that are bounded to current Node object
 func (n *MetricSyncerNode) generateMetricTag(ctx context.Context) (tags []metrics.MetricTag) {
 	if n.node == nil && n.metaServer != nil && n.metaServer.NodeFetcher != nil {
 		node, err := n.metaServer.GetNode(ctx)
@@ -250,15 +251,29 @@ func (n *MetricSyncerNode) generateMetricTag(ctx context.Context) (tags []metric
 		Key: fmt.Sprintf("%s%s", data.CustomMetricLabelSelectorPrefixKey, "is_vm"),
 		Val: isVmStr,
 	})
+	return tags
+}
 
+// generateMetricTag generates tags that are bounded to current Node object
+func (n *MetricSyncerNode) generateMetricTagNode(ctx context.Context) (tags []metrics.MetricTag) {
+	tags = n.generateMetricTag(ctx)
 	// append node numa bit mask
 	numas := n.metaServer.KatalystMachineInfo.CPUDetails.NUMANodes()
 	numaBitMask := sysadvisortypes.NumaIDBitMask(numas.ToSliceInt())
-
 	tags = append(tags, metrics.MetricTag{
 		Key: fmt.Sprintf("%s%s", data.CustomMetricLabelSelectorPrefixKey, "numa_bit_mask"),
 		Val: fmt.Sprintf("%d", numaBitMask),
 	})
+	return tags
+}
 
+// generateMetricTag generates tags that are bounded to current numa node object
+func (n *MetricSyncerNode) generateMetricTagNuma(ctx context.Context, numaID int) (tags []metrics.MetricTag) {
+	tags = n.generateMetricTag(ctx)
+	numaBitMask := sysadvisortypes.NumaIDBitMask([]int{numaID})
+	tags = append(tags, metrics.MetricTag{
+		Key: fmt.Sprintf("%s%s", data.CustomMetricLabelSelectorPrefixKey, "numa_bit_mask"),
+		Val: fmt.Sprintf("%d", numaBitMask),
+	})
 	return tags
 }

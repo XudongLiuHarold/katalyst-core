@@ -686,38 +686,41 @@ func (m *MalachiteMetricsProvisioner) processSystemNUMAComputeData(systemCompute
 	}
 
 	ccdMbmTotalPsData := systemComputeData.L3Mon.L3Mon
-	updateTime := systemComputeData.L3Mon.UpdateTime
-	time := time.Unix(updateTime, 0)
+	updateTimeUnix := systemComputeData.L3Mon.UpdateTime
+	updateTime := time.Unix(updateTimeUnix, 0)
 
-	numaMbmTotalPsData := make(map[int]uint64)
+	numaMbmTotalData := make(map[int]uint64)
+	numaMbmVictimPsData := make(map[int]uint64)
 	for _, ccdMbmTotalPs := range ccdMbmTotalPsData {
 		numaID, err := getNumaIDByL3CacheID(ccdMbmTotalPs.ID, consts.SystemCpuDir, consts.SystemNodeDir)
 		if err != nil {
 			continue
 		}
-		numaMbmTotalPsData[numaID] += ccdMbmTotalPs.MbmTotalBytes
+		numaMbmTotalData[numaID] += ccdMbmTotalPs.MbmTotalBytes
 		// for AMD milan & AMD genoa, total = 0x3f + 0x40
 		if strings.Contains(systemComputeData.CPUCodeName, consts.AMDMilanArch) {
-			numaMbmTotalPsData[numaID] += ccdMbmTotalPs.MbmVictimBytesPerSec
+			numaMbmVictimPsData[numaID] += ccdMbmTotalPs.MbmVictimBytesPerSec
 		}
 		if strings.Contains(systemComputeData.CPUCodeName, consts.AMDGenoaArch) {
-			numaMbmTotalPsData[numaID] += ccdMbmTotalPs.MbmLocalBytes
+			numaMbmTotalData[numaID] += ccdMbmTotalPs.MbmLocalBytes
 		}
 	}
 
-	for numaID, totalMbm := range numaMbmTotalPsData {
-		// get prev update time
+	for numaID, totalMbm := range numaMbmTotalData {
 		prevMetric, err := m.metricStore.GetNumaMetric(numaID, consts.MetricTotalMemBandwidthNuma)
-		if err != nil || prevMetric.Time == nil {
-			klog.ErrorS(err, "failed to get previous numa total mbm", "err", err)
-		} else {
-			timeInterval := uint64(updateTime - prevMetric.Time.Unix())
-			if timeInterval <= 0 {
-				continue
+		var mbmPerSec float64 = 0
+		if err == nil && prevMetric.Time != nil {
+			timeInterval := uint64(updateTimeUnix - prevMetric.Time.Unix())
+			if timeInterval > 0 && float64(totalMbm) > prevMetric.Value {
+				mbmPerSec = (float64(totalMbm) - prevMetric.Value) / float64(timeInterval)
 			}
-			totalMbm = (totalMbm - uint64(prevMetric.Value)) / timeInterval
 		}
-		m.metricStore.SetNumaMetric(numaID, consts.MetricTotalMemBandwidthNuma, utilmetric.MetricData{Value: float64(totalMbm), Time: &time})
+		// for AMD milan, total = 0x3f + 0x40
+		if strings.Contains(systemComputeData.CPUCodeName, consts.AMDMilanArch) {
+			mbmPerSec += float64(numaMbmVictimPsData[numaID])
+		}
+		m.metricStore.SetNumaMetric(numaID, consts.MetricTotalMemBandwidthNuma, utilmetric.MetricData{Value: float64(totalMbm), Time: &updateTime})
+		m.metricStore.SetNumaMetric(numaID, consts.MetricTotalPsMemBandwidthNuma, utilmetric.MetricData{Value: mbmPerSec, Time: &updateTime})
 	}
 }
 

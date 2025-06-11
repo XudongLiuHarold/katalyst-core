@@ -139,7 +139,7 @@ func TestReceiveRawNUMA(t *testing.T) {
 	assert.NoError(t, err)
 
 	metaServer.MetricsFetcher.RegisterExternalMetric(func(store *metricutil.MetricStore) {
-		store.SetByStringIndex(consts.MetricTotalMemBandwidthNuma, "test-numa-bandwidth")
+		store.SetByStringIndex(consts.MetricTotalPsMemBandwidthNuma, "test-numa-bandwidth")
 	})
 	metaServer.MetricsFetcher.Run(context.Background())
 
@@ -154,7 +154,7 @@ func TestReceiveRawNUMA(t *testing.T) {
 		now := time.Now()
 		notifiedResponse := metrictypes.NotifiedResponse{
 			Req: metrictypes.NotifiedRequest{
-				MetricName: consts.MetricTotalMemBandwidthNuma,
+				MetricName: consts.MetricTotalPsMemBandwidthNuma,
 				NumaID:     0,
 			},
 			MetricData: metricutil.MetricData{

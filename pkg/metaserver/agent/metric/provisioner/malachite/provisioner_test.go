@@ -300,7 +300,6 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 	now := time.Unix(1749596247, 0) // 0 nanoseconds
 	mb1 := uint64(100)
 	mb2 := uint64(200)
-	mb3 := uint64(0)
 	mbLocal1 := uint64(50)
 	mbLocal2 := uint64(70)
 
@@ -309,65 +308,10 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 		args          args
 		prevMetric    *utilmetric.MetricData
 		prevMetricErr error
-		wantValue     float64
+		wantTotal     float64
+		wantPerSec    float64
 		expectSet     bool
 	}{
-		{
-			name: "sum two values and zero, no previous metric",
-			args: args{
-				podUID:        "test pod 1",
-				containerName: "test container 1",
-				mbmData: malachitetypes.MbmbandData{
-					Mbm: []malachitetypes.MBMItem{
-						{MBMTotalBytes: &mb1},
-						{MBMTotalBytes: &mb2},
-						{MBMTotalBytes: nil},
-						{MBMTotalBytes: &mb3},
-					},
-				},
-				updateTime:  &now,
-				cpuCodeName: "",
-			},
-			prevMetric:    nil,
-			prevMetricErr: assert.AnError,
-			wantValue:     300,
-			expectSet:     true,
-		},
-		{
-			name: "all nil MBMTotalBytes, no previous metric",
-			args: args{
-				podUID:        "test pod 2",
-				containerName: "test container 2",
-				mbmData: malachitetypes.MbmbandData{
-					Mbm: []malachitetypes.MBMItem{
-						{MBMTotalBytes: nil},
-						{MBMTotalBytes: nil},
-					},
-				},
-				updateTime:  &now,
-				cpuCodeName: "",
-			},
-			prevMetric:    nil,
-			prevMetricErr: assert.AnError,
-			wantValue:     0,
-			expectSet:     true,
-		},
-		{
-			name: "empty Mbm slice, no previous metric",
-			args: args{
-				podUID:        "test pod 3",
-				containerName: "test container 3",
-				mbmData: malachitetypes.MbmbandData{
-					Mbm: []malachitetypes.MBMItem{},
-				},
-				updateTime:  &now,
-				cpuCodeName: "",
-			},
-			prevMetric:    nil,
-			prevMetricErr: assert.AnError,
-			wantValue:     0,
-			expectSet:     true,
-		},
 		{
 			name: "AMD Genoa arch sums MBMTotalBytes and MBMLocalBytes, no previous metric",
 			args: args{
@@ -384,7 +328,8 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 			},
 			prevMetric:    nil,
 			prevMetricErr: assert.AnError,
-			wantValue:     100 + 50 + 200 + 70,
+			wantTotal:     100 + 50 + 200 + 70,
+			wantPerSec:    0,
 			expectSet:     true,
 		},
 		{
@@ -402,10 +347,11 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 			},
 			prevMetric: &utilmetric.MetricData{
 				Value: 100,
-				Time:  ptrTime(now.Add(-100 * time.Second)),
+				Time:  ptrTime(now.Add(-10 * time.Second)),
 			},
 			prevMetricErr: nil,
-			wantValue:     float64((200 - 100) / 100), // (totalMbm - prevMetric.Value) / timeInterval
+			wantTotal:     200,
+			wantPerSec:    float64(200-100) / 10, // (totalMbm - prevMetric.Value) / timeInterval
 			expectSet:     true,
 		},
 		{
@@ -426,8 +372,9 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 				Time:  ptrTime(now.Add(100 * time.Second)), // future time
 			},
 			prevMetricErr: nil,
-			wantValue:     0, // should not set
-			expectSet:     false,
+			wantTotal:     200,
+			wantPerSec:    0, // should be zero
+			expectSet:     true,
 		},
 		{
 			name: "has previous metric, nil time",
@@ -447,7 +394,8 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 				Time:  nil,
 			},
 			prevMetricErr: nil,
-			wantValue:     200,
+			wantTotal:     200,
+			wantPerSec:    0,
 			expectSet:     true,
 		},
 	}
@@ -469,10 +417,11 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 				metricStore: store,
 			}
 			mmp.setContainerMbmTotalMetric(tc.args.podUID, tc.args.containerName, tc.args.mbmData, tc.args.updateTime)
+			// Check total MBM
 			data, err := store.GetContainerMetric(tc.args.podUID, tc.args.containerName, consts.MetricMbmTotalContainer)
 			if tc.expectSet {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.wantValue, data.Value)
+				assert.Equal(t, tc.wantTotal, data.Value)
 				assert.Equal(t, *tc.args.updateTime, *data.Time)
 			} else {
 				// Should not update metric, so value should be unchanged (previous metric)
@@ -480,6 +429,17 @@ func Test_setContainerMbmTotalMetric(t *testing.T) {
 					assert.Equal(t, tc.prevMetric.Value, data.Value)
 				} else {
 					assert.Error(t, err)
+				}
+			}
+			// Check per second MBM
+			dataPerSec, errPerSec := store.GetContainerMetric(tc.args.podUID, tc.args.containerName, consts.MetricMbmTotalPsContainer)
+			if tc.expectSet {
+				assert.NoError(t, errPerSec)
+				assert.InDelta(t, tc.wantPerSec, dataPerSec.Value, 1e-6)
+				assert.Equal(t, *tc.args.updateTime, *dataPerSec.Time)
+			} else {
+				if tc.prevMetric != nil {
+					assert.Error(t, errPerSec)
 				}
 			}
 		})

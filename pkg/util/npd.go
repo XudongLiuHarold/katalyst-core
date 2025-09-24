@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/klog/v2"
 
 	configv1alpha1 "github.com/kubewharf/katalyst-api/pkg/apis/config/v1alpha1"
 	"github.com/kubewharf/katalyst-api/pkg/apis/node/v1alpha1"
@@ -45,9 +46,15 @@ func InsertNPDScopedNodeMetrics(
 		return
 	}
 
+	klog.InfoS("[watermark] debug 1", "status node metric", status.NodeMetrics)
+	klog.InfoS("[watermark] debug 1", "scoped node metrics", scopedNodeMetrics)
+
 	if status.NodeMetrics == nil {
 		status.NodeMetrics = []v1alpha1.ScopedNodeMetrics{}
 	}
+
+	klog.InfoS("[watermark] debug 2", "status node metric", status.NodeMetrics)
+	klog.InfoS("[watermark] debug 2", "scoped node metrics", scopedNodeMetrics)
 
 	for i := range status.NodeMetrics {
 		if status.NodeMetrics[i].Scope == scopedNodeMetrics.Scope {
@@ -56,7 +63,13 @@ func InsertNPDScopedNodeMetrics(
 		}
 	}
 
+	klog.InfoS("[watermark] debug 3", "status node metric", status.NodeMetrics)
+	klog.InfoS("[watermark] debug 3", "scoped node metrics", scopedNodeMetrics)
+
 	status.NodeMetrics = append(status.NodeMetrics, *scopedNodeMetrics)
+
+	klog.InfoS("[watermark] debug 4", "status node metric", status.NodeMetrics)
+	klog.InfoS("[watermark] debug 4", "scoped node metrics", scopedNodeMetrics)
 }
 
 func InsertNPDScopedPodMetrics(

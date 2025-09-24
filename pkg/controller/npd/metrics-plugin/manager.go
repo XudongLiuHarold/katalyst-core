@@ -67,6 +67,7 @@ func (im *MetricsManager) UpdateNodeMetrics(name string, scopedNodeMetrics []v1a
 		im.statusMap[name] = initNodeProfileDescriptorStatus()
 	}
 	for _, scopedNodeMetric := range scopedNodeMetrics {
+		klog.InfoS("[watermark] manager debug", "scoped node metric", scopedNodeMetric)
 		util.InsertNPDScopedNodeMetrics(im.statusMap[name], &scopedNodeMetric)
 	}
 

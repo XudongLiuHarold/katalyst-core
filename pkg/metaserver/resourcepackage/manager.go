@@ -63,6 +63,7 @@ func (m *resourcePackageManager) NodeResourcePackages(ctx context.Context) (map[
 		}
 		resourcePackageMap[numaID] = metric.ResourcePackages
 	}
+
 	return resourcePackageMap, apierrors.NewAggregate(errList)
 }
 
